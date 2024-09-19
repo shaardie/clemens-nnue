@@ -11,7 +11,7 @@ namespace c_chess_cli
     void Pos::unpack_packed_pieces()
     {
         // shadow occ
-        uint64_t occ = occ;
+        uint64_t occ = this->occ;
 
         int i = 0;
         while (occ)

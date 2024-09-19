@@ -104,8 +104,11 @@ SparseBatch::SparseBatch(const std::vector<trainingDataEntry> &entries)
     // That is first comes the first position, then second, then third,
     // and so on. And within features for one position the feature indices
     // are also in ascending order. Why this is needed will be apparent later.
-    white_features_indices = new int[size * MAX_ACTIVE_FEATURES * 2];
-    black_features_indices = new int[size * MAX_ACTIVE_FEATURES * 2];
+
+    // I do not get why this should be size * MAX_ACTIVE_FEATURES * 2, so I removed it.
+    // Let's see if this break.
+    white_features_indices = new int[size * MAX_ACTIVE_FEATURES];
+    black_features_indices = new int[size * MAX_ACTIVE_FEATURES];
 
     fill(entries);
 }
@@ -120,10 +123,9 @@ void SparseBatch::fill(const std::vector<trainingDataEntry> &entries)
         int offset = i * MAX_ACTIVE_FEATURES;
         for (int j = 0; j < entries[i].number_active_features; ++j)
         {
-            int idx = offset + entries[i].white_features_indices[j];
-            std::cout << idx << std::endl;
-            white_features_indices[offset + entries[i].white_features_indices[j]] = 1;
-            // black_features_indices[offset + j] = entries[i].black_features_indices[j];
+            int idx = offset + j;
+            white_features_indices[idx] = entries[i].black_features_indices[j];
+            black_features_indices[idx] = entries[i].black_features_indices[j];
         }
         num_active_features = entries[i].number_active_features;
     }
@@ -179,7 +181,6 @@ SparseBatch *BatchStream::GetBatch()
         }
 
         // generate indices for all pieces except the kings
-        int pieces[pos.number_of_pieces - 2][3];
         int number_active_features = 0;
         int white_features_indices[MAX_ACTIVE_FEATURES] = {0};
         int black_features_indices[MAX_ACTIVE_FEATURES] = {0};
