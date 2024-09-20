@@ -23,10 +23,9 @@ int main(int argc, char *argv[])
         std::cout << "no filename given" << std::endl;
         return 1;
     }
-    BatchStream batchstream(argv[1], 1024);
+    BatchStream batchstream(argv[1], 2);
     SparseBatch *sparsebatch = batchstream.GetBatch();
     std::cout << "size: " << sparsebatch->size << std::endl;
-    std::cout << "num_active_features: " << sparsebatch->num_active_features << std::endl;
     std::cout << "score: ";
     printArray(sparsebatch->score, sparsebatch->size);
     std::cout << std::endl;

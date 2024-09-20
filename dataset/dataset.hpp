@@ -37,13 +37,13 @@ struct trainingDataEntry
     int black_features_indices[MAX_ACTIVE_FEATURES];
     int turn;
     int score;
-    int result;
+    float result;
 
     trainingDataEntry(
         int number_active_features,
         const int (&wfi)[MAX_ACTIVE_FEATURES],
         const int (&bfi)[MAX_ACTIVE_FEATURES],
-        int turn, int score, int result);
+        int turn, int score, float result);
 };
 std::ostream &operator<<(std::ostream &os, const trainingDataEntry &tde);
 
@@ -53,7 +53,7 @@ struct SparseBatch
     void fill(const std::vector<trainingDataEntry> &entries);
 
     int size;
-    int num_active_features;
+    // int num_active_features;
 
     int *stm;
     int *score;

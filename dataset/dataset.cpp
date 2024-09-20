@@ -39,7 +39,7 @@ trainingDataEntry::trainingDataEntry(
     int number_active_features,
     const int (&wfi)[MAX_ACTIVE_FEATURES],
     const int (&bfi)[MAX_ACTIVE_FEATURES],
-    int turn, int score, int result)
+    int turn, int score, float result)
     : number_active_features(number_active_features),
       turn(turn), score(score), result(result)
 {
@@ -50,34 +50,6 @@ trainingDataEntry::trainingDataEntry(
     }
 }
 
-std::ostream &operator<<(std::ostream &os, const trainingDataEntry &tde)
-{
-    os << "(white features=(";
-    for (int i = 0; i < MAX_ACTIVE_FEATURES; ++i)
-    {
-        os << tde.white_features_indices[i];
-        if (i != MAX_ACTIVE_FEATURES - 1)
-        {
-            os << ", ";
-        }
-    }
-    os << "), ";
-
-    os << "black features: (";
-    for (int i = 0; i < MAX_ACTIVE_FEATURES; ++i)
-    {
-        os << tde.black_features_indices[i];
-        if (i != MAX_ACTIVE_FEATURES - 1)
-        {
-            os << ", ";
-        }
-    }
-    os << "), ";
-
-    os << "number_of_features=" << tde.number_active_features << ", turn=" << tde.turn << ", score=" << tde.score << ", result=" << tde.result << ")";
-    return os;
-}
-
 SparseBatch::SparseBatch(const std::vector<trainingDataEntry> &entries)
 {
 
@@ -85,7 +57,8 @@ SparseBatch::SparseBatch(const std::vector<trainingDataEntry> &entries)
     size = entries.size();
 
     // The total number of white/black active features in the whole batch.
-    num_active_features = 0;
+    // I do not get this one
+    // num_active_features = 0;
 
     // The side to move for each position. 1 for white, 0 for black.
     // Required for ordering the accumulator slices in the forward pass.
@@ -119,15 +92,21 @@ void SparseBatch::fill(const std::vector<trainingDataEntry> &entries)
     {
         stm[i] = entries[i].turn;
         score[i] = entries[i].score;
-        result[i] = static_cast<float>(entries[i].result) / 2.0;
+        result[i] = entries[i].result;
         int offset = i * MAX_ACTIVE_FEATURES;
-        for (int j = 0; j < entries[i].number_active_features; ++j)
+        for (int j = 0; j < MAX_ACTIVE_FEATURES; ++j)
         {
             int idx = offset + j;
+            if (j >= entries[i].number_active_features)
+            {
+                white_features_indices[idx] = -1;
+                black_features_indices[idx] = -1;
+                continue;
+            }
             white_features_indices[idx] = entries[i].black_features_indices[j];
             black_features_indices[idx] = entries[i].black_features_indices[j];
+            continue;
         }
-        num_active_features = entries[i].number_active_features;
     }
 }
 
@@ -154,6 +133,25 @@ BatchStream::~BatchStream()
 {
     stream.close();
 };
+
+float convert_result(int turn, int result)
+{
+    switch (result)
+    {
+    // turn looses
+    case 0:
+        return turn == WHITE ? 0 : 1;
+    // draw
+    case 1:
+        return 0.5;
+    // turn wins
+    case 2:
+        return turn == WHITE ? 1 : 0;
+        break;
+    }
+    throw std::runtime_error("strange result");
+    return 0;
+}
 
 SparseBatch *BatchStream::GetBatch()
 {
@@ -198,7 +196,9 @@ SparseBatch *BatchStream::GetBatch()
             number_active_features++;
         }
 
-        trainingDataEntry tde(number_active_features, white_features_indices, black_features_indices, pos.turn, pos.score, pos.result);
+        trainingDataEntry tde(
+            number_active_features, white_features_indices, black_features_indices,
+            pos.turn, pos.score, convert_result(pos.turn, pos.result));
         v.push_back(tde);
     };
 

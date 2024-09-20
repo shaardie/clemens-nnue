@@ -3,6 +3,8 @@
 #include <exception>
 #include <fstream>
 
+#include <iostream>
+
 #include "c_chess_cli.hpp"
 
 namespace c_chess_cli
@@ -16,7 +18,7 @@ namespace c_chess_cli
         int i = 0;
         while (occ)
         {
-            int packed_piece = i % 2 ? packed_pieces[(i+1)/2] >> 4 : packed_pieces[(i+1)/2] & 0x0F;
+            int packed_piece = i % 2 ? packed_pieces[(i + 1) / 2] >> 4 : packed_pieces[(i + 1) / 2] & 0x0F;
             Piece *piece = &pieces[i];
 
             // get square via builtin least significat bit function
@@ -48,13 +50,13 @@ namespace c_chess_cli
         {
             throw std::exception();
         }
-        std::uint8_t turn = turn_and_rule50 & 1;
+        turn = turn_and_rule50 & 1;
         assert(turn <= 1);
-        std::uint8_t rule50 = turn_and_rule50 >> 1;
+        rule50 = turn_and_rule50 >> 1;
         assert(rule50 <= 100);
 
         // calculate number of pieces (number of 1s)
-        this->number_of_pieces = __builtin_popcountll(occ);
+        number_of_pieces = __builtin_popcountll(occ);
         assert(number_of_pieces <= 32);
 
         // read packed pieces
