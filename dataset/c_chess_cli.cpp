@@ -33,14 +33,14 @@ namespace c_chess_cli
             i++;
         }
     }
-
+    Pos::Pos() {}
     Pos::Pos(std::ifstream &stream)
     {
         // read occupation
         stream.read(reinterpret_cast<char *>(&occ), sizeof(occ));
         if (stream.gcount() != sizeof(occ))
         {
-            throw std::exception();
+            throw std::runtime_error("unable to read occ");
         }
 
         // read turn and rule50
@@ -48,7 +48,7 @@ namespace c_chess_cli
         stream.read(reinterpret_cast<char *>(&turn_and_rule50), sizeof(turn_and_rule50));
         if (stream.gcount() != sizeof(turn_and_rule50))
         {
-            throw std::exception();
+            throw std::runtime_error("unable to read turn and rule50");
         }
         turn = turn_and_rule50 & 1;
         assert(turn <= 1);
@@ -64,20 +64,20 @@ namespace c_chess_cli
         stream.read(reinterpret_cast<char *>(packed_pieces), packed_pieces_size);
         if (stream.gcount() != packed_pieces_size)
         {
-            throw std::exception();
+            throw std::runtime_error("unable to read packed pieces");
         }
 
         unpack_packed_pieces();
         stream.read(reinterpret_cast<char *>(&score), sizeof(score));
         if (stream.gcount() != sizeof(score))
         {
-            throw std::exception();
+            throw std::runtime_error("unable to read score");
         }
 
         stream.read(reinterpret_cast<char *>(&result), sizeof(result));
         if (stream.gcount() != sizeof(result))
         {
-            throw std::exception();
+            throw std::runtime_error("unable to read result");
         }
         assert(result <= 2);
     }

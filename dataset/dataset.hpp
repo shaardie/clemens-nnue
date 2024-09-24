@@ -53,7 +53,7 @@ struct SparseBatch
     void fill(const std::vector<trainingDataEntry> &entries);
 
     int size;
-    // int num_active_features;
+    int num_active_features;
 
     int *stm;
     int *score;
@@ -66,18 +66,21 @@ struct SparseBatch
 
 struct BatchStream
 {
-    BatchStream(std::string filename, std::uint16_t batch_size);
+    BatchStream(std::string filename, uint batch_size);
     ~BatchStream();
     SparseBatch *GetBatch();
 
     std::string filename;
     std::ifstream stream;
-    std::uint16_t batch_size;
+    uint batch_size;
 };
 
 extern "C"
 {
-    BatchStream *CreateBatchStream(char *filename, std::uint16_t batch_size);
+    BatchStream *CreateBatchStream(char *filename, uint batch_size);
+    void DestroyBatchStream(BatchStream *batchStream);
+    SparseBatch *GetNextBatch(BatchStream *batchstream);
+    void DestroyBatch(SparseBatch *sparseBatch);
 }
 
 #endif

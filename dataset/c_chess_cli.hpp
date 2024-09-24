@@ -54,6 +54,7 @@ namespace c_chess_cli
 
     public:
         Pos(std::ifstream &stream);
+        Pos();
         ~Pos();
     };
 };

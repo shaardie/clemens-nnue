@@ -23,32 +23,38 @@ int main(int argc, char *argv[])
         std::cout << "no filename given" << std::endl;
         return 1;
     }
-    BatchStream batchstream(argv[1], 2);
-    SparseBatch *sparsebatch = batchstream.GetBatch();
-    std::cout << "size: " << sparsebatch->size << std::endl;
-    std::cout << "score: ";
-    printArray(sparsebatch->score, sparsebatch->size);
-    std::cout << std::endl;
-    std::cout << "result: ";
-    printArray(sparsebatch->result, sparsebatch->size);
-    std::cout << std::endl;
-    std::cout << "stm: ";
-    printArray(sparsebatch->stm, sparsebatch->size);
-    std::cout << std::endl;
-    std::cout << "white features: " << std::endl;
-    for (int i = 0; i < sparsebatch->size; ++i)
-    {
-        std::cout << "  ";
-        printArray(sparsebatch->white_features_indices, sparsebatch->size * MAX_ACTIVE_FEATURES);
-        std::cout << std::endl;
-    }
-        std::cout << "black features: " << std::endl;
-    for (int i = 0; i < sparsebatch->size; ++i)
-    {
-        std::cout << "  ";
-        printArray(sparsebatch->black_features_indices, sparsebatch->size * MAX_ACTIVE_FEATURES);
-        std::cout << std::endl;
-    }
 
+    BatchStream *batchStream = CreateBatchStream(argv[1], 16384);
+    int i = 0;
+    while (true)
+    {
+        if (i % 100 == 0)
+        {
+            std::cout << i << " Batches read" << std::endl;
+        }
+        i++;
+        SparseBatch *sparsebatch = GetNextBatch(batchStream);
+        if (NULL == sparsebatch) {
+            return 0;
+        }
+        DestroyBatch(sparsebatch);
+        // std::cout << "size: " << sparsebatch->size << std::endl;
+        // std::cout << "num_active_features: " << sparsebatch->num_active_features << std::endl;
+        // std::cout << "score: ";
+        // printArray(sparsebatch->score, sparsebatch->size);
+        // std::cout << std::endl;
+        // std::cout << "result: ";
+        // printArray(sparsebatch->result, sparsebatch->size);
+        // std::cout << std::endl;
+        // std::cout << "stm: ";
+        // printArray(sparsebatch->stm, sparsebatch->size);
+        // std::cout << std::endl;
+        // std::cout << "white features: ";
+        // printArray(sparsebatch->white_features_indices, sparsebatch->size * MAX_ACTIVE_FEATURES * 2);
+        // std::cout << std::endl;
+        // std::cout << "black features: ";
+        // printArray(sparsebatch->black_features_indices, sparsebatch->size * MAX_ACTIVE_FEATURES * 2);
+    }
+    DestroyBatchStream(batchStream);
     return 0;
 }
