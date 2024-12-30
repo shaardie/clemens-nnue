@@ -1,54 +1,28 @@
-#include "dataset.hpp"
+#include "batchstream.hpp"
 #include <iostream>
 
-template <typename T>
-void printArray(T arr[], int size)
-{
-    std::cout << "[";
-    for (int i = 0; i < size; ++i)
-    {
-        std::cout << arr[i];
-        if (i < size - 1)
-        {
-            std::cout << ", ";
-        }
-    }
-    std::cout << "]";
-}
+#define BATCH_SIZE 1024
+#define CACHE_SIZE 1024
+#define MAX_ITERATIONS 1000000
 
-int main(int argc, char *argv[])
-{
-    if (argc < 2)
-    {
-        std::cout << "no filename given" << std::endl;
-        return 1;
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    std::cout << "no filename given" << std::endl;
+    return 1;
+  }
+  dataset::BatchStream batchstream(argv[1], BATCH_SIZE, CACHE_SIZE);
+  auto start = std::chrono::high_resolution_clock::now();
+  int i;
+  for (i = 0; i < MAX_ITERATIONS; i++) {
+    dataset::SparseBatch *sparsebatch = batchstream.GetBatch();
+    if (sparsebatch == NULL) {
+      break;
     }
-    BatchStream batchstream(argv[1], 2);
-    SparseBatch *sparsebatch = batchstream.GetBatch();
-    std::cout << "size: " << sparsebatch->size << std::endl;
-    std::cout << "score: ";
-    printArray(sparsebatch->score, sparsebatch->size);
-    std::cout << std::endl;
-    std::cout << "result: ";
-    printArray(sparsebatch->result, sparsebatch->size);
-    std::cout << std::endl;
-    std::cout << "stm: ";
-    printArray(sparsebatch->stm, sparsebatch->size);
-    std::cout << std::endl;
-    std::cout << "white features: " << std::endl;
-    for (int i = 0; i < sparsebatch->size; ++i)
-    {
-        std::cout << "  ";
-        printArray(sparsebatch->white_features_indices, sparsebatch->size * MAX_ACTIVE_FEATURES);
-        std::cout << std::endl;
-    }
-        std::cout << "black features: " << std::endl;
-    for (int i = 0; i < sparsebatch->size; ++i)
-    {
-        std::cout << "  ";
-        printArray(sparsebatch->black_features_indices, sparsebatch->size * MAX_ACTIVE_FEATURES);
-        std::cout << std::endl;
-    }
-
-    return 0;
+    delete sparsebatch;
+  }
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+  std::cout << "Read " << i * BATCH_SIZE << " positions in " << i << " batches "
+            << elapsed.count() << " seconds" << std::endl;
+  return 0;
 }
