@@ -8,8 +8,7 @@ SparseBatch::SparseBatch(const std::vector<trainingDataEntry> &entries) {
   size = entries.size();
 
   // The total number of white/black active features in the whole batch.
-  // I do not get this one
-  // num_active_features = 0;
+  num_active_features = 0;
 
   // The side to move for each position. 1 for white, 0 for black.
   // Required for ordering the accumulator slices in the forward pass.
@@ -30,30 +29,27 @@ SparseBatch::SparseBatch(const std::vector<trainingDataEntry> &entries) {
   // and so on. And within features for one position the feature indices
   // are also in ascending order. Why this is needed will be apparent later.
 
-  // I do not get why this should be size * MAX_ACTIVE_FEATURES * 2, so I
-  // removed it. Let's see if this break.
-  white_features_indices = new int[size * MAX_ACTIVE_FEATURES];
-  black_features_indices = new int[size * MAX_ACTIVE_FEATURES];
+  white_features_indices = new int[size * MAX_ACTIVE_FEATURES * 2];
+  black_features_indices = new int[size * MAX_ACTIVE_FEATURES * 2];
 
   fill(entries);
 }
 
 void SparseBatch::fill(const std::vector<trainingDataEntry> &entries) {
-  for (int i = 0; i < size; ++i) {
-    stm[i] = entries[i].turn;
-    score[i] = entries[i].score;
-    result[i] = entries[i].result;
-    int offset = i * MAX_ACTIVE_FEATURES;
-    for (int j = 0; j < MAX_ACTIVE_FEATURES; ++j) {
-      int idx = offset + j;
-      if (j >= entries[i].number_active_features) {
-        white_features_indices[idx] = -1;
-        black_features_indices[idx] = -1;
-        continue;
-      }
-      white_features_indices[idx] = entries[i].black_features_indices[j];
-      black_features_indices[idx] = entries[i].black_features_indices[j];
-      continue;
+  for (int position_index = 0; position_index < size; ++position_index) {
+    const trainingDataEntry *entry = &entries[position_index];
+    stm[position_index] = entry->turn;
+    score[position_index] = entry->score;
+    result[position_index] = entry->result;
+
+    for (int j = 0; j < entry->number_active_features; ++j) {
+      white_features_indices[2 * num_active_features] = position_index;
+      black_features_indices[2 * num_active_features] = position_index;
+      white_features_indices[2 * num_active_features + 1] =
+          entry->white_features_indices[j];
+      black_features_indices[2 * num_active_features + 1] =
+          entry->black_features_indices[j];
+      num_active_features++;
     }
   }
 }

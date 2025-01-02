@@ -2,11 +2,118 @@ import logging
 import argparse
 
 import json
-import io
+import ctypes
 import torch
 import torch.utils
 import torch.utils.data
-from torch.utils.tensorboard import SummaryWriter
+import numpy as np  # silly, but easier to use other code
+from torch.utils.tensorboard.writer import SummaryWriter
+
+MAX_ACTIVE_FEATURES = 32
+
+# External C Library
+libdataset = ctypes.CDLL("./build/libdataset.so")
+
+CreateBatchStream = libdataset.CreateBatchStream
+CreateBatchStream.argtypes = [ctypes.c_char_p, ctypes.c_uint]
+CreateBatchStream.restype = ctypes.c_void_p
+
+DestroyBatchStream = libdataset.DestroyBatchStream
+DestroyBatchStream.argtypes = [ctypes.c_void_p]
+DestroyBatchStream.restype = None
+
+
+class SparseBatch(ctypes.Structure):
+    _fields_ = [
+        ("size", ctypes.c_int),
+        ("num_active_features", ctypes.c_int),
+        ("stm", ctypes.POINTER(ctypes.c_int)),
+        ("score", ctypes.POINTER(ctypes.c_int)),
+        ("result", ctypes.POINTER(ctypes.c_float)),
+        ("white_features_indices", ctypes.POINTER(ctypes.c_int)),
+        ("black_features_indices", ctypes.POINTER(ctypes.c_int)),
+    ]
+
+    def get_tensors(self):
+        stm = torch.from_numpy(np.ctypeslib.as_array(self.score, shape=(self.size, 1)))
+        score = torch.from_numpy(
+            np.ctypeslib.as_array(self.score, shape=(self.size, 1))
+        )
+        result = torch.from_numpy(
+            np.ctypeslib.as_array(self.result, shape=(self.size, 1))
+        )
+
+        # As we said, the index tensor needs to be transposed (not the whole sparse tensor!).
+        # This is just how pytorch stores indices in sparse tensors.
+        # It also requires the indices to be 64-bit ints.
+        white_features_indices = torch.transpose(
+            torch.from_numpy(
+                np.ctypeslib.as_array(
+                    self.white_features_indices,
+                    shape=(self.num_active_features, 2),
+                )
+            ),
+            0,
+            1,
+        ).long()
+        black_features_indices = torch.transpose(
+            torch.from_numpy(
+                np.ctypeslib.as_array(
+                    self.black_features_indices,
+                    shape=(self.num_active_features, 2),
+                )
+            ),
+            0,
+            1,
+        ).long()
+
+        # The values are all ones, so we can create these tensors in place easily.
+        # No need to go through a copy.
+        white_features_values = torch.ones(self.num_active_features)
+        black_features_values = torch.ones(self.num_active_features)
+
+        # Now the magic. We construct a sparse tensor by giving the indices of
+        # non-zero values (active feature indices) and the values themselves (all ones!).
+        # The size of the tensor is batch_size*NUM_FEATURES, which would
+        # normally be insanely large, but since the density is ~0.1% it takes
+        # very little space and allows for faster forward pass.
+        # For maximum performance we do cheat somewhat though. Normally pytorch
+        # checks the correctness, which is an expensive O(n) operation.
+        # By using _sparse_coo_tensor_unsafe we avoid that.
+        white_features = torch.sparse_coo_tensor(
+            white_features_indices,
+            white_features_values,
+            (self.size, NUM_FEATURES),
+            is_coalesced=True,
+        )
+        black_features = torch.sparse_coo_tensor(
+            black_features_indices,
+            black_features_values,
+            (self.size, NUM_FEATURES),
+            is_coalesced=True,
+        )
+
+        # What is coalescing?! It makes sure the indices are unique and ordered.
+        # Now you probably see why we said the inputs must be ordered from the start.
+        # This is normally a O(n log n) operation and takes a significant amount of
+        # time. But here we **know** that the tensor is already in a coalesced form,
+        # therefore we can just tell pytorch that it can use that assumption.
+        white_features._coalesced_(True)
+        black_features._coalesced_(True)
+
+        return (white_features, black_features, stm, score, result)
+
+
+SparseBatchPtr = ctypes.POINTER(SparseBatch)
+
+GetNextBatch = libdataset.GetNextBatch
+GetNextBatch.argtypes = [ctypes.c_void_p]
+GetNextBatch.restype = SparseBatchPtr
+
+DestroyBatch = libdataset.DestroyBatch
+DestroyBatch.argtypes = [SparseBatchPtr]
+DestroyBatch.restype = None
+
 
 writer = SummaryWriter()
 # torch._logging.set_logs(dynamo = logging.DEBUG)
@@ -19,170 +126,6 @@ NUM_FEATURES = 64 * 64 * 5 * 2 * 2
 M = 4
 N = 8
 K = 1
-
-
-class LSB:
-    def __iter__(self, bitboard: int):
-        self.b = bitboard
-        return self
-
-    def __next__(self):
-        x = self.bitboard & -self.bitboard
-        self.bitboard &= self.bitboard - 1
-        return x
-
-
-PAWN = 0
-KNIGHT = 1
-BISHOP = 2
-ROOK = 3
-QUEEN = 4
-KING = 5
-
-ExtPieceToClemens = [
-    KNIGHT,
-    BISHOP,
-    ROOK,
-    QUEEN,
-    KING,
-    PAWN,
-    ROOK,
-    PAWN,
-]
-
-
-WHITE = 0
-BLACK = 1
-
-
-class IterableDataset(torch.utils.data.IterableDataset):
-    def __init__(self, filename):
-        self.filename = filename
-
-    def __iter__(self):
-        with open(self.filename, "rb") as f:
-            while True:
-                occ_bytes = f.read(8)
-                occ = int.from_bytes(occ_bytes, signed=False)
-                number_of_pieces = occ.bit_count()
-                assert number_of_pieces <= 32
-                turn_and_rules50 = int.from_bytes(f.read(1))
-                turn = turn_and_rules50 & 1
-                assert turn <= 1
-                rules50 = turn_and_rules50 >> 1
-                assert rules50 <= 100
-                packed_pieces_size = (number_of_pieces + 1) // 2
-                assert packed_pieces_size <= 16
-                packed_pieces = f.read(packed_pieces_size)
-                pieces = []
-                kings = [None, None]
-                for b in packed_pieces:
-                    for piece in b & 0x0F, b >> 4:
-                        square = (occ & -occ).bit_length() - 1
-                        occ &= occ - 1
-                        piece_type = ExtPieceToClemens[(piece & 0xFE) // 2]
-                        piece_color = piece & 1
-                        if piece_type == KING:
-                            kings[piece_color] = square
-                            continue
-                        pieces.append((square, piece_type, piece_color))
-
-                print(pieces)
-                return
-                # This is an upstream bug
-                # https://github.com/lucasart/c-chess-cli/issues/63
-                score = int.from_bytes(f.read(4), signed=True, byteorder="little")
-                result = int.from_bytes(f.read(4), signed=False, byteorder="little") / 2
-
-                white_features = torch.zeros(NUM_FEATURES)
-                black_features = torch.zeros(NUM_FEATURES)
-
-                for piece in pieces:
-                    white_features[calc_index(piece, kings[WHITE])] = 1
-                    black_features[calc_index(piece, kings[BLACK])] = 1
-
-                white_features = white_features.to_sparse()
-                black_features = black_features.to_sparse()
-                yield (white_features, black_features, turn, score, result)
-
-
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, filename):
-        super(Dataset).__init__()
-
-        self.filename = filename
-
-        logger.debug(f"Read the file {self.filename} to memory")
-        # Read file into
-        with open(self.filename, "rb") as f:
-            self.data = f.read()
-
-        logger.info(f"examine dataset {self.filename}")
-        self.idxs = []
-        self.f = io.BytesIO(self.data)
-        idx = 0
-        while True:
-            self.idxs.append(idx)
-            occ_bytes = self.f.read(8)
-            if len(occ_bytes) == 0:
-                break
-            number_of_piece_bytes = (
-                int.from_bytes(occ_bytes, signed=False).bit_count() + 1
-            ) // 2
-            idx += 8 + 1 + number_of_piece_bytes + 4 + 4
-            self.f.seek(idx)
-        self.f.seek(0)
-        logger.info(f"found {len(self.idxs)} positions")
-        logger.info(f"approx. {self.idxs[-1]} bytes")
-
-    def __len__(self):
-        return len(self.idxs)
-
-    def __getitem__(self, idx):
-        self.f.seek(self.idxs[idx])
-        occ_bytes = self.f.read(8)
-        occ = int.from_bytes(occ_bytes, signed=False)
-        number_of_pieces = occ.bit_count()
-        assert number_of_pieces <= 32
-        turn_and_rules50 = int.from_bytes(self.f.read(1))
-        turn = turn_and_rules50 & 1
-        assert turn <= 1
-        rules50 = turn_and_rules50 >> 1
-        assert rules50 <= 100
-        packed_pieces_size = (number_of_pieces + 1) // 2
-        assert packed_pieces_size <= 16
-        packed_pieces = self.f.read(packed_pieces_size)
-        pieces = []
-        kings = [None, None]
-        for b in packed_pieces:
-            for piece in b & 0x0F, b >> 4:
-                square = (occ & -occ).bit_length() - 1
-                occ &= occ - 1
-                piece_type = ExtPieceToClemens[(piece & 0xFE) // 2]
-                piece_color = piece & 1
-                if piece_type == KING:
-                    kings[piece_color] = square
-                    continue
-                pieces.append((square, piece_type, piece_color))
-
-        score = int.from_bytes(self.f.read(4), signed=True, byteorder="little")
-        result = int.from_bytes(self.f.read(4), signed=False, byteorder="little") / 2
-
-        white_features = torch.zeros(NUM_FEATURES)
-        black_features = torch.zeros(NUM_FEATURES)
-
-        for piece in pieces:
-            white_features[calc_index(piece, kings[WHITE])] = 1
-            black_features[calc_index(piece, kings[BLACK])] = 1
-
-        white_features = white_features.to_sparse()
-        black_features = black_features.to_sparse()
-        return (white_features, black_features, turn, score, result)
-
-
-def calc_index(piece, king):
-    piece_index = piece[1] * 2 + piece[2]
-    return piece[0] + (piece_index + king * 10) * 64
 
 
 def collate(data):
@@ -345,14 +288,7 @@ def init():
 def main():
     args = init()
 
-    if torch.cuda.is_available():
-        device = "cuda"
-        logger.info(f"use cuda with GPU {torch.cuda.get_device_name()}")
-    else:
-        device = "cpu"
-        logger.info("use cpu")
-
-    model = NNUE(args.lr, args.lambda_).to(device)
+    model = NNUE(args.lr, args.lambda_).to("cpu")
 
     if args.load_state:
         logger.info(f"load previous model {args.load_state}")
@@ -363,23 +299,22 @@ def main():
 
     batch_number = 0
     while epoch > 0:
+        batchstream = CreateBatchStream(args.dataset.encode("utf-8"), args.batch_size)
         logger.info(f"epoch: {epoch}")
-        dataset = IterableDataset(args.dataset)
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=args.batch_size,
-            collate_fn=collate,
-        )
-
-        for batch in iter(dataloader):
+        while True:
+            sparseBatchPtr = GetNextBatch(batchstream)
+            try:
+                batch = sparseBatchPtr.contents.get_tensors()
+            except ValueError as e:
+                logger.info("NULL Pointer, so probably end of file: %s", e)
+                break
             model.training_step(batch, batch_number)
             batch_number += 1
-            if batch_number % 10 == 0:
-                logger.debug(f"trained {batch_number} batches")
-
+            if batch_number % 1000 == 0:
                 torch.save(model.state_dict(), args.save_state)
                 logger.debug(f"saved state to {args.save_state}")
-
+            DestroyBatch(sparseBatchPtr)
+        DestroyBatchStream(batchstream)
         epoch -= 1
 
     logger.info("training finished")

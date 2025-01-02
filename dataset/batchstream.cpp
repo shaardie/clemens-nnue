@@ -1,6 +1,7 @@
 #include "batchstream.hpp"
 #include "c_chess_cli.hpp"
 #include "trainingdataset.hpp"
+#include <algorithm>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -83,6 +84,12 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
     black_features_indices[number_active_features] =
         piece->square + (p_idx + king_squares[BLACK] * 10) * 64;
     number_active_features++;
+
+    // sort the indices
+    std::sort(white_features_indices,
+              white_features_indices + number_active_features);
+    std::sort(black_features_indices,
+              black_features_indices + number_active_features);
   }
 
   trainingDataEntry tde(number_active_features, white_features_indices,
@@ -130,8 +137,3 @@ PieceType fromExtType(c_chess_cli::PieceType extPieceType) {
 }
 
 } // namespace dataset
-dataset::BatchStream *CreateBatchStream(char *filename,
-                                        std::uint16_t batch_size,
-                                        std::uint16_t cache_size) {
-  return new dataset::BatchStream(filename, batch_size, cache_size);
-}

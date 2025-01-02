@@ -35,9 +35,4 @@ public:
 PieceType fromExtType(c_chess_cli::PieceType extPieceType);
 } // namespace dataset
 
-extern "C" {
-dataset::BatchStream *CreateBatchStream(char *filename,
-                                        std::uint16_t batch_size,
-                                        std::uint16_t cache_size);
-}
 #endif

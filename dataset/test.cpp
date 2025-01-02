@@ -1,4 +1,4 @@
-#include "batchstream.hpp"
+#include "c_interface.hpp"
 #include <iostream>
 
 #define BATCH_SIZE 1024
@@ -14,13 +14,17 @@ int main(int argc, char *argv[]) {
   auto start = std::chrono::high_resolution_clock::now();
   int i;
   for (i = 0; i < MAX_ITERATIONS; i++) {
-    dataset::SparseBatch *sparsebatch = batchstream.GetBatch();
+
+    dataset::SparseBatch *sparsebatch = GetNextBatch(&batchstream);
     if (sparsebatch == NULL) {
       break;
     }
-    delete sparsebatch;
+    DestroyBatch(sparsebatch);
   }
   auto end = std::chrono::high_resolution_clock::now();
+
+  // DestroyBatchStream(&batchstream);
+
   std::chrono::duration<double> elapsed = end - start;
   std::cout << "Read " << i * BATCH_SIZE << " positions in " << i << " batches "
             << elapsed.count() << " seconds" << std::endl;

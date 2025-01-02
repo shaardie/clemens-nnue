@@ -8,7 +8,7 @@ struct SparseBatch {
   void fill(const std::vector<trainingDataEntry> &entries);
 
   int size;
-  // int num_active_features;
+  int num_active_features;
 
   int *stm;
   int *score;
