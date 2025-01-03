@@ -3,7 +3,6 @@
 
 #define BATCH_SIZE 1024
 #define CACHE_SIZE 1024
-#define MAX_ITERATIONS 1000000
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -13,8 +12,7 @@ int main(int argc, char *argv[]) {
   dataset::BatchStream batchstream(argv[1], BATCH_SIZE, CACHE_SIZE);
   auto start = std::chrono::high_resolution_clock::now();
   int i;
-  for (i = 0; i < MAX_ITERATIONS; i++) {
-
+  while (true) {
     dataset::SparseBatch *sparsebatch = GetNextBatch(&batchstream);
     if (sparsebatch == NULL) {
       break;
@@ -23,7 +21,7 @@ int main(int argc, char *argv[]) {
   }
   auto end = std::chrono::high_resolution_clock::now();
 
-  // DestroyBatchStream(&batchstream);
+  DestroyBatchStream(&batchstream);
 
   std::chrono::duration<double> elapsed = end - start;
   std::cout << "Read " << i * BATCH_SIZE << " positions in " << i << " batches "
