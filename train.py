@@ -128,22 +128,6 @@ N = 8
 K = 1
 
 
-def collate(data):
-    data = zip(*data)
-    white_features = torch.stack(next(data))
-    black_features = torch.stack(next(data))
-    turn = torch.tensor(next(data)).reshape(-1, 1)
-    score = torch.tensor(next(data)).reshape(-1, 1)
-    result = torch.tensor(next(data)).reshape(-1, 1)
-    return (
-        white_features,
-        black_features,
-        turn,
-        score,
-        result,
-    )
-
-
 class NNUE(torch.nn.Module):
     def __init__(self, lr, lambda_):
         super(NNUE, self).__init__()
