@@ -34,43 +34,51 @@ class SparseBatch(ctypes.Structure):
         ("black_features_indices", ctypes.POINTER(ctypes.c_int)),
     ]
 
-    def get_tensors(self):
+    def get_tensors(self, device):
         stm = torch.from_numpy(np.ctypeslib.as_array(self.score, shape=(self.size, 1)))
         score = torch.from_numpy(
             np.ctypeslib.as_array(self.score, shape=(self.size, 1))
-        )
+        ).to(device)
         result = torch.from_numpy(
             np.ctypeslib.as_array(self.result, shape=(self.size, 1))
-        )
+        ).to(device)
 
         # As we said, the index tensor needs to be transposed (not the whole sparse tensor!).
         # This is just how pytorch stores indices in sparse tensors.
         # It also requires the indices to be 64-bit ints.
-        white_features_indices = torch.transpose(
-            torch.from_numpy(
-                np.ctypeslib.as_array(
-                    self.white_features_indices,
-                    shape=(self.num_active_features, 2),
-                )
-            ),
-            0,
-            1,
-        ).long()
-        black_features_indices = torch.transpose(
-            torch.from_numpy(
-                np.ctypeslib.as_array(
-                    self.black_features_indices,
-                    shape=(self.num_active_features, 2),
-                )
-            ),
-            0,
-            1,
-        ).long()
+        white_features_indices = (
+            torch.transpose(
+                torch.from_numpy(
+                    np.ctypeslib.as_array(
+                        self.white_features_indices,
+                        shape=(self.num_active_features, 2),
+                    )
+                ),
+                0,
+                1,
+            )
+            .long()
+            .to(device)
+        )
+        black_features_indices = (
+            torch.transpose(
+                torch.from_numpy(
+                    np.ctypeslib.as_array(
+                        self.black_features_indices,
+                        shape=(self.num_active_features, 2),
+                    )
+                ),
+                0,
+                1,
+            )
+            .long()
+            .to(device)
+        )
 
         # The values are all ones, so we can create these tensors in place easily.
         # No need to go through a copy.
-        white_features_values = torch.ones(self.num_active_features)
-        black_features_values = torch.ones(self.num_active_features)
+        white_features_values = torch.ones(self.num_active_features).to(device)
+        black_features_values = torch.ones(self.num_active_features).to(device)
 
         # Now the magic. We construct a sparse tensor by giving the indices of
         # non-zero values (active feature indices) and the values themselves (all ones!).
@@ -85,13 +93,13 @@ class SparseBatch(ctypes.Structure):
             white_features_values,
             (self.size, NUM_FEATURES),
             is_coalesced=True,
-        )
+        ).to(device)
         black_features = torch.sparse_coo_tensor(
             black_features_indices,
             black_features_values,
             (self.size, NUM_FEATURES),
             is_coalesced=True,
-        )
+        ).to(device)
 
         # What is coalescing?! It makes sure the indices are unique and ordered.
         # Now you probably see why we said the inputs must be ordered from the start.
@@ -273,12 +281,13 @@ def main():
     args = init()
 
     # Check if CUDA is available and select the GPU
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device == "cuda":
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
         print(
             f"CUDA is available! You have {torch.cuda.device_count()} CUDA-capable devices."
         )
     else:
+        device = torch.device("cpu")
         print("CUDA is not available. The GPU will not be used.")
 
     model = NNUE(args.lr, args.lambda_).to(device)
@@ -297,7 +306,7 @@ def main():
         while True:
             sparseBatchPtr = GetNextBatch(batchstream)
             try:
-                batch = sparseBatchPtr.contents.get_tensors()
+                batch = sparseBatchPtr.contents.get_tensors(device)
             except ValueError as e:
                 logger.info("NULL Pointer, so probably end of file: %s", e)
                 break
