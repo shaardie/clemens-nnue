@@ -60,6 +60,7 @@ SparseBatch::~SparseBatch() {
   // have stable ABI
   delete[] stm;
   delete[] score;
+  delete[] result;
   delete[] white_features_indices;
   delete[] black_features_indices;
 }

@@ -3,6 +3,7 @@
 #include "trainingdataset.hpp"
 #include <algorithm>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -11,7 +12,7 @@ namespace dataset {
 BatchStream::BatchStream(std::string filename, std::uint16_t batch_size,
                          std::uint16_t cache_size)
     : filename(filename), batch_size(batch_size), cache_size(cache_size),
-      chan(1024) {
+      chan(1024), stopped(false) {
   stream.open(filename);
   if (!stream) {
     throw std::runtime_error("unable to open file");
@@ -21,7 +22,20 @@ BatchStream::BatchStream(std::string filename, std::uint16_t batch_size,
 };
 
 BatchStream::~BatchStream() {
-  thread.join();
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    stopped = true;
+  }
+
+  if (thread.joinable()) {
+    thread.join();
+  }
+
+  SparseBatch *sp;
+  while (chan.pop(sp)) {
+    delete sp;
+  }
+
   stream.close();
 };
 
@@ -100,6 +114,13 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
 
 void BatchStream::run() {
   while (true) {
+    {
+      std::lock_guard<std::mutex> lock(mtx);
+      if (stopped) {
+        chan.close();
+        return;
+      }
+    }
     std::vector<trainingDataEntry> v;
     for (int x = 0; x < batch_size; ++x) {
       try {

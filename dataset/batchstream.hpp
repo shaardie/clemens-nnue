@@ -24,6 +24,8 @@ private:
 
   channel::Channel<SparseBatch *> chan;
   std::thread thread;
+  bool stopped;
+  std::mutex mtx;
 
 public:
   BatchStream(std::string filename, std::uint16_t batch_size,
