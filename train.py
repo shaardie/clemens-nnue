@@ -272,7 +272,16 @@ def init():
 def main():
     args = init()
 
-    model = NNUE(args.lr, args.lambda_).to("cpu")
+    # Check if CUDA is available and select the GPU
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device == "cuda":
+        print(
+            f"CUDA is available! You have {torch.cuda.device_count()} CUDA-capable devices."
+        )
+    else:
+        print("CUDA is not available. The GPU will not be used.")
+
+    model = NNUE(args.lr, args.lambda_).to(device)
 
     if args.load_state:
         logger.info(f"load previous model {args.load_state}")
