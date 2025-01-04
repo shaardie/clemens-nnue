@@ -35,7 +35,9 @@ class SparseBatch(ctypes.Structure):
     ]
 
     def get_tensors(self, device):
-        stm = torch.from_numpy(np.ctypeslib.as_array(self.score, shape=(self.size, 1)))
+        stm = torch.from_numpy(
+            np.ctypeslib.as_array(self.score, shape=(self.size, 1))
+        ).to(device)
         score = torch.from_numpy(
             np.ctypeslib.as_array(self.score, shape=(self.size, 1))
         ).to(device)
@@ -158,9 +160,9 @@ class NNUE(torch.nn.Module):
 
         # Remember that we order the accumulators for 2 perspectives based on who is to move.
         # So we blend two possible orderings by interpolating between `stm` and `1-stm` tensors.
-        accumulator = (turn * torch.cat([w, b], dim=1).to(self.device)).to(
-            self.device
-        ) + ((1 - turn) * torch.cat([b, w], dim=1).to(self.device)).to(self.device)
+        accumulator = (turn * torch.cat([w, b], dim=1)) + (
+            (1 - turn) * torch.cat([b, w], dim=1)
+        )
 
         # Run the linear layers and use clamp_ as ClippedReLU
         l1_x = torch.clamp(accumulator, 0.0, 1.0)
