@@ -137,7 +137,7 @@ K = 1
 
 
 class NNUE(torch.nn.Module):
-    def __init__(self, lr, lambda_):
+    def __init__(self, lr, lambda_, device):
         super(NNUE, self).__init__()
 
         self.l0 = torch.nn.Linear(NUM_FEATURES, M)
@@ -145,6 +145,7 @@ class NNUE(torch.nn.Module):
         self.l2 = torch.nn.Linear(N, K)
 
         self.lambda_ = lambda_
+        self.device = device
 
         self.optimizer = torch.optim
         self.optimizer = torch.optim.SGD(self.parameters(), lr=lr)
@@ -159,7 +160,7 @@ class NNUE(torch.nn.Module):
         # So we blend two possible orderings by interpolating between `stm` and `1-stm` tensors.
         accumulator = (turn * torch.cat([w, b], dim=1)) + (
             (1 - turn) * torch.cat([b, w], dim=1)
-        )
+        ).to(self.device)
 
         # Run the linear layers and use clamp_ as ClippedReLU
         l1_x = torch.clamp(accumulator, 0.0, 1.0)
@@ -290,7 +291,7 @@ def main():
         device = torch.device("cpu")
         print("CUDA is not available. The GPU will not be used.")
 
-    model = NNUE(args.lr, args.lambda_).to(device)
+    model = NNUE(args.lr, args.lambda_, device).to(device)
 
     if args.load_state:
         logger.info(f"load previous model {args.load_state}")
