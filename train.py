@@ -158,9 +158,9 @@ class NNUE(torch.nn.Module):
 
         # Remember that we order the accumulators for 2 perspectives based on who is to move.
         # So we blend two possible orderings by interpolating between `stm` and `1-stm` tensors.
-        accumulator = (turn * torch.cat([w, b], dim=1).to(self.device)) + (
-            (1 - turn) * torch.cat([b, w], dim=1).to(self.device)
-        )
+        accumulator = (turn * torch.cat([w, b], dim=1).to(self.device)).to(
+            self.device
+        ) + ((1 - turn) * torch.cat([b, w], dim=1).to(self.device)).to(self.device)
 
         # Run the linear layers and use clamp_ as ClippedReLU
         l1_x = torch.clamp(accumulator, 0.0, 1.0)
