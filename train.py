@@ -9,6 +9,8 @@ import torch.utils.data
 import numpy as np  # silly, but easier to use other code
 from torch.utils.tensorboard.writer import SummaryWriter
 
+torch.set_printoptions(threshold=torch.inf)
+
 MAX_ACTIVE_FEATURES = 32
 
 # External C Library
@@ -139,7 +141,7 @@ K = 1
 
 
 class NNUE(torch.nn.Module):
-    def __init__(self, lr, lambda_, device):
+    def __init__(self, lambda_, device):
         super(NNUE, self).__init__()
 
         self.l0 = torch.nn.Linear(NUM_FEATURES, M)
@@ -149,8 +151,13 @@ class NNUE(torch.nn.Module):
         self.lambda_ = lambda_
         self.device = device
 
-        self.optimizer = torch.optim
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=lr)
+        # self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)
+
+        # try another initialization
+        torch.nn.init.kaiming_uniform_(self.l0.weight, nonlinearity="relu")
+        torch.nn.init.kaiming_uniform_(self.l1.weight, nonlinearity="relu")
+        torch.nn.init.kaiming_uniform_(self.l2.weight, nonlinearity="relu")
 
     # The inputs are a whole batch!
     # `turn` indicates whether white is the side to move. 1 = true, 0 = false.
@@ -177,37 +184,62 @@ class NNUE(torch.nn.Module):
         # Make predictions for this batch
         output = self(*batch)
 
-        writer.add_histogram("output/train", output, batch_number)
-
-        writer.add_scalars(
-            "output/train",
-            {
-                "max": output.max(),
-                "min": output.min(),
-                "mean": output.mean(),
-            },
-            batch_number,
-        )
+        for i, param_group in enumerate(self.optimizer.param_groups):
+            writer.add_scalar(
+                f"Learning_rate/group_{i}", param_group["lr"], batch_number
+            )
 
         # Compute the loss and its gradients
-        loss = self.loss(batch, output)
-        writer.add_scalar("Loss/train", loss, batch_number)
+        loss = self.loss(batch, output, batch_number)
 
         # Adjust learning weights
         loss.backward()
+
+        # clip Gradient Norm
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+
+        for name, param in self.named_parameters():
+            if param.grad is not None:
+                writer.add_histogram(f"Gradients/{name}", param.grad, batch_number)
+                writer.add_scalar(
+                    f"Gradients/{name}_norm", param.grad.norm().item(), batch_number
+                )
         self.optimizer.step()
 
-    def loss(self, batch, output):
+        return loss
+
+    def loss(self, batch, output, batch_number):
         white_features, black_features, turn, score, result = batch
 
         # Loss function
-        scaling_factor = 10  # TODO better value
+        scaling_factor = 600  # Brings values in sigmoid closer together
         lambda_ = self.lambda_
         wdl_eval_model = torch.sigmoid(output / scaling_factor)
         wdl_eval_target = torch.sigmoid(score / scaling_factor)
         wdl_value_target = lambda_ * wdl_eval_target + (1 - lambda_) * result
+        if batch_number % 10 == 0:
+            writer.add_histogram("Predictions/output", output, batch_number)
+            writer.add_scalars(
+                "Predictions/output",
+                {
+                    "max": output.max(),
+                    "min": output.min(),
+                    "mean": output.mean(),
+                },
+                batch_number,
+            )
+            writer.add_histogram(
+                "Targets/wdl_value_target", wdl_value_target, batch_number
+            )
+            writer.add_histogram("Targets/score", score, batch_number)
         loss = torch.pow(wdl_eval_model - wdl_value_target, 2)
-        return loss.mean()
+        mean_loss = loss.mean()
+        writer.add_scalars(
+            "Loss/train",
+            {"max": loss.max(), "min": loss.min(), "mean": mean_loss},
+            batch_number,
+        )
+        return mean_loss
 
     def save(self, filename):
         d = self.state_dict()
@@ -255,15 +287,9 @@ def init():
 
     parser.add_argument("--load-state", help="path to starting model starting model")
 
-    parser.add_argument("--epoch", type=int, default=1, help="epoch, defaults 1")
+    parser.add_argument("--epoch", type=int, default=10, help="epoch, defaults 10")
     parser.add_argument(
         "--batch-size", type=int, default=8192, help="batch size, defaults 8192"
-    )
-    parser.add_argument(
-        "--lr",
-        type=float,
-        default=0.1,
-        help="learning rate, defaults to 20, which is silly",
     )
     parser.add_argument(
         "--lambda", dest="lambda_", type=float, default=0.5, help="lambda"
@@ -293,7 +319,7 @@ def main():
         device = torch.device("cpu")
         print("CUDA is not available. The GPU will not be used.")
 
-    model = NNUE(args.lr, args.lambda_, device).to(device)
+    model = NNUE(args.lambda_, device).to(device)
 
     if args.load_state:
         logger.info(f"load previous model {args.load_state}")
@@ -313,13 +339,18 @@ def main():
             except ValueError as e:
                 logger.info("NULL Pointer, so probably end of file: %s", e)
                 break
-            model.training_step(batch, batch_number)
+            loss = model.training_step(batch, batch_number)
             batch_number += 1
             if batch_number % 1000 == 0:
+                logger.debug(f"loss {loss}")
+            if batch_number % 10000 == 0:
                 torch.save(model.state_dict(), args.save_state)
                 logger.debug(f"saved state to {args.save_state}")
             DestroyBatch(sparseBatchPtr)
         DestroyBatchStream(batchstream)
+        for name, param in model.named_parameters():
+            writer.add_scalar(f"Weight_norm/{name}", param.norm().item(), epoch)
+            writer.add_histogram(f"Parameters/{name}", param, epoch)
         epoch -= 1
 
     logger.info("training finished")
