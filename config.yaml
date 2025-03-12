@@ -1,0 +1,14 @@
+training:
+  epochs: 1
+  batch_size: 8192
+  learning_rate: 0.01
+  momentum: 0.9
+  lambda: 1
+  scaling_factor: 600
+  save_model: "model.pt"
+
+dataset:
+  path: "sample.bin"
+
+logging:
+  verbose: true

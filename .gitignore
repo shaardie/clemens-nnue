@@ -1,5 +1,6 @@
 .venv/
 build/
 run/
+__pycache__/
 
 sample.bin
