@@ -7,6 +7,8 @@
 #include <thread>
 #include <vector>
 
+#define MAX_INT16 32767
+
 namespace dataset {
 
 BatchStream::BatchStream(std::string filename, std::uint16_t batch_size,
@@ -65,7 +67,15 @@ SparseBatch *BatchStream::GetBatch() {
 };
 
 void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
-  c_chess_cli::Pos pos(stream);
+  // Get next position, which is not a forced mate
+  c_chess_cli::Pos pos;
+  while (true) {
+    c_chess_cli::Pos newPos(stream);
+    if (newPos.score < MAX_INT16 - 1000 && newPos.score > -MAX_INT16 + 1000) {
+      pos = newPos;
+      break;
+    }
+  }
 
   // find kings, I guess this could be done better
   int kings_found = 0;
