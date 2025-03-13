@@ -6,15 +6,22 @@
 
 namespace c_chess_cli {
 
-void Pos::unpack_packed_pieces() {
-  // shadow occ
-  uint64_t occ = this->occ;
+BinPosReader::BinPosReader(std::string filename) {
+  stream.open(filename);
+  if (!stream) {
+    throw std::runtime_error("unable to open file");
+  }
+};
+BinPosReader::~BinPosReader() { stream.close(); };
+
+void BinPosReader::unpack_packed_pieces(Pos &pos, uint64_t occ,
+                                        std::uint8_t packed_pieces[16]) {
 
   int i = 0;
   while (occ) {
     int packed_piece = i % 2 ? packed_pieces[(i + 1) / 2] >> 4
                              : packed_pieces[(i + 1) / 2] & 0x0F;
-    Piece *piece = &pieces[i];
+    Piece *piece = &pos.pieces[i];
 
     // get square via builtin least significat bit function
     piece->square = __builtin_ctzll(occ & -occ);
@@ -29,10 +36,11 @@ void Pos::unpack_packed_pieces() {
   }
 }
 
-Pos::Pos() {}
+Pos BinPosReader::read_pos() {
+  Pos pos;
 
-Pos::Pos(std::ifstream &stream) {
   // read occupation
+  std::uint64_t occ; // occupied squares (bitboard)
   stream.read(reinterpret_cast<char *>(&occ), sizeof(occ));
   if (stream.gcount() != sizeof(occ)) {
     throw std::runtime_error("unable to read occ");
@@ -45,34 +53,38 @@ Pos::Pos(std::ifstream &stream) {
   if (stream.gcount() != sizeof(turn_and_rule50)) {
     throw std::runtime_error("unable to read turn and rule50");
   }
-  turn = turn_and_rule50 & 1;
-  assert(turn <= 1);
-  rule50 = turn_and_rule50 >> 1;
-  assert(rule50 <= 100);
+  pos.set_turn(turn_and_rule50 & 1);
+  pos.set_rule50(turn_and_rule50 >> 1);
 
   // calculate number of pieces (number of 1s)
-  number_of_pieces = __builtin_popcountll(occ);
-  assert(number_of_pieces <= 32);
+  pos.set_number_of_pieces(__builtin_popcountll(occ));
 
   // read packed pieces
-  int packed_pieces_size = (number_of_pieces + 1) / 2;
+  std::uint8_t packed_pieces[16]; // 4 bits per piece, max 16 bytes
+  int packed_pieces_size = (pos.get_number_of_pieces() + 1) / 2;
   stream.read(reinterpret_cast<char *>(packed_pieces), packed_pieces_size);
   if (stream.gcount() != packed_pieces_size) {
     throw std::runtime_error("unable to read packed pieces");
   }
 
-  unpack_packed_pieces();
+  unpack_packed_pieces(pos, occ, packed_pieces);
+
+  // This is an upstream bug
+  // upstream bug https://github.com/lucasart/c-chess-cli/issues/63
+  // So size is different
+  std::int32_t score = 0;
   stream.read(reinterpret_cast<char *>(&score), sizeof(score));
   if (stream.gcount() != sizeof(score)) {
     throw std::runtime_error("unable to read score");
   }
+  pos.set_score(static_cast<std::int16_t>(score));
 
+  std::uint32_t result = 0;
   stream.read(reinterpret_cast<char *>(&result), sizeof(result));
   if (stream.gcount() != sizeof(result)) {
     throw std::runtime_error("unable to read result");
   }
-  assert(result <= 2);
+  pos.set_result(static_cast<std::uint8_t>(result));
+  return pos;
 }
-
-Pos::~Pos() {}
 }; // namespace c_chess_cli

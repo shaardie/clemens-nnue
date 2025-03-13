@@ -17,10 +17,9 @@ private:
   void run();
   void addPos(std::vector<trainingDataEntry> &v);
 
-  std::string filename;
-  std::ifstream stream;
   std::uint16_t batch_size;
   std::uint16_t cache_size;
+  c_chess_cli::PosReader *pos_reader;
 
   channel::Channel<SparseBatch *> chan;
   std::thread thread;
