@@ -135,8 +135,8 @@ void BatchStream::run() {
         chan.close();
         return;
       }
-      chan.push(new SparseBatch(v));
     }
+    chan.push(new SparseBatch(v));
   }
 };
 
