@@ -2,7 +2,6 @@
 #include "c_chess_cli.hpp"
 #include "trainingdataset.hpp"
 #include <algorithm>
-#include <iostream>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -13,13 +12,10 @@ namespace dataset {
 
 BatchStream::BatchStream(std::string filename, std::uint16_t batch_size,
                          std::uint16_t cache_size)
-    : filename(filename), batch_size(batch_size), cache_size(cache_size),
-      chan(1024), stopped(false) {
-  stream.open(filename);
-  if (!stream) {
-    throw std::runtime_error("unable to open file");
-  }
+    : batch_size(batch_size), cache_size(cache_size), chan(1024),
+      stopped(false) {
 
+  pos_reader = new c_chess_cli::BinPosReader(filename);
   thread = std::thread(&BatchStream::run, this);
 };
 
@@ -38,7 +34,7 @@ BatchStream::~BatchStream() {
     delete sp;
   }
 
-  stream.close();
+  delete pos_reader;
 };
 
 float convert_result(int turn, int result) {
@@ -70,9 +66,9 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
   // Get next position, which is not a forced mate
   c_chess_cli::Pos pos;
   while (true) {
-    c_chess_cli::Pos newPos(stream);
-    if (newPos.score < MAX_INT16 - 1000 && newPos.score > -MAX_INT16 + 1000) {
-      pos = newPos;
+    pos = pos_reader->read_pos();
+    if (pos.get_score() < MAX_INT16 - 1000 &&
+        pos.get_score() > -MAX_INT16 + 1000) {
       break;
     }
   }
@@ -80,7 +76,7 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
   // find kings, I guess this could be done better
   int kings_found = 0;
   int king_squares[2] = {0};
-  for (int i = 0; i < pos.number_of_pieces; ++i) {
+  for (int i = 0; i < pos.get_number_of_pieces(); ++i) {
     c_chess_cli::Piece *piece = &pos.pieces[i];
     if (piece->type != c_chess_cli::KING) {
       continue;
@@ -96,7 +92,7 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
   int number_active_features = 0;
   int white_features_indices[MAX_ACTIVE_FEATURES] = {0};
   int black_features_indices[MAX_ACTIVE_FEATURES] = {0};
-  for (int i = 0; i < pos.number_of_pieces; ++i) {
+  for (int i = 0; i < pos.get_number_of_pieces(); ++i) {
     c_chess_cli::Piece *piece = &pos.pieces[i];
     if (piece->type == c_chess_cli::KING) {
       continue;
@@ -117,8 +113,8 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
   }
 
   trainingDataEntry tde(number_active_features, white_features_indices,
-                        black_features_indices, pos.turn, pos.score,
-                        convert_result(pos.turn, pos.result));
+                        black_features_indices, pos.get_turn(), pos.get_score(),
+                        convert_result(pos.get_turn(), pos.get_result()));
   v.push_back(tde);
 }
 
