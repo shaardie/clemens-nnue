@@ -56,6 +56,8 @@ def train_model(model: NNUE, config: dict, device: torch.device):
                 )
             data_loader.DestroyBatch(sparseBatchPtr)
         data_loader.DestroyBatchStream(batchstream)
+        # save model after every epoch
+        torch.save(model.state_dict(), "model_weights.pth")
         for name, param in model.named_parameters():
             writer.add_scalar(f"Weight_norm/{name}", param.norm().item(), epoch)
             writer.add_histogram(f"Parameters/{name}", param, epoch)

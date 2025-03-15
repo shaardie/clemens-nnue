@@ -22,6 +22,7 @@ if __name__ == "__main__":
     setup_logging(config["logging"]["verbose"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info("Run on device %s", device)
     model = NNUE().to(device)
 
     train_model(model, config, device)
