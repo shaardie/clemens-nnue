@@ -47,8 +47,13 @@ def train_model(model: NNUE, config: dict, device: torch.device):
             )
 
             batch_number += 1
-            if batch_number % 100 == 0:
+            if batch_number % 1000 == 0:
                 logging.debug(f"loss {loss}")
+                writer.add_scalar(
+                    "Loss/train",
+                    loss,
+                    batch_number,
+                )
             data_loader.DestroyBatch(sparseBatchPtr)
         data_loader.DestroyBatchStream(batchstream)
         for name, param in model.named_parameters():
@@ -72,7 +77,7 @@ def training_step(model: NNUE, batch, optimizer, batch_number, lambda_, scaling_
     # clip Gradient Norm
     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-    if batch_number % 100 == 0:
+    if batch_number % 1000 == 0:
         for name, param in model.named_parameters():
             if param.grad is not None:
                 writer.add_histogram(f"Gradients/{name}", param.grad, batch_number)
@@ -91,8 +96,9 @@ def compute_loss(batch, output, lambda_, batch_number, scaling_factor):
     wdl_eval_model = torch.sigmoid(output / scaling_factor)
     wdl_eval_target = torch.sigmoid(score / scaling_factor)
     wdl_value_target = lambda_ * wdl_eval_target + (1 - lambda_) * result
-    if batch_number % 100 == 0:
-        writer.add_histogram("Predictions/output", output, batch_number)
+    if batch_number % 1000 == 0:
+        writer.add_histogram("Model/value", wdl_eval_model, batch_number)
+        writer.add_histogram("Model/score", output, batch_number)
         writer.add_scalars(
             "Predictions/output",
             {
@@ -102,17 +108,6 @@ def compute_loss(batch, output, lambda_, batch_number, scaling_factor):
             },
             batch_number,
         )
-        writer.add_histogram("Targets/wdl_value_target", wdl_value_target, batch_number)
-        writer.add_histogram("Targets/score", score, batch_number)
-    loss = torch.pow(wdl_eval_model - wdl_value_target, 2)
-    mean_loss = loss.mean()
-    writer.add_scalars(
-        "Loss/train",
-        {
-            "max": loss.max().item(),
-            "min": loss.min().item(),
-            "mean": mean_loss.item(),
-        },
-        batch_number,
-    )
-    return mean_loss
+        writer.add_histogram("Target/value", wdl_value_target, batch_number)
+        writer.add_histogram("Target/score", score, batch_number)
+    return torch.nn.functional.mse_loss(wdl_eval_model, wdl_value_target)
