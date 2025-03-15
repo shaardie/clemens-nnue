@@ -5,3 +5,8 @@ run/
 __pycache__/
 
 sample.bin
+sample.csv
+model.pt
+model_weights.pth
+output.txt
+runs/

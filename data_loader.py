@@ -9,7 +9,7 @@ from model import NUM_FEATURES
 libdataset = ctypes.CDLL("./build/libdataset.so")
 
 CreateBatchStream = libdataset.CreateBatchStream
-CreateBatchStream.argtypes = [ctypes.c_char_p, ctypes.c_uint]
+CreateBatchStream.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes.c_uint]
 CreateBatchStream.restype = ctypes.c_void_p
 
 DestroyBatchStream = libdataset.DestroyBatchStream

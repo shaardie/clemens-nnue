@@ -10,6 +10,7 @@ writer = SummaryWriter()
 def train_model(model: NNUE, config: dict, device: torch.device):
     epochs = config["training"]["epochs"]
     batch_size = config["training"]["batch_size"]
+    cache_size = config["training"]["cache_size"]
     dataset_path = config["dataset"]["path"]
     lambda_ = config["training"]["lambda"]
     scaling_factor = config["training"]["scaling_factor"]
@@ -32,7 +33,7 @@ def train_model(model: NNUE, config: dict, device: torch.device):
     for epoch in range(epochs):
         logging.info(f"Epoch {epoch + 1}/{epochs}")
         batchstream = data_loader.CreateBatchStream(
-            dataset_path.encode("utf-8"), batch_size
+            dataset_path.encode("utf-8"), batch_size, cache_size,
         )
         while True:
             sparseBatchPtr = data_loader.GetNextBatch(batchstream)
