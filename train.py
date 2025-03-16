@@ -33,7 +33,9 @@ def train_model(model: NNUE, config: dict, device: torch.device):
     for epoch in range(epochs):
         logging.info(f"Epoch {epoch + 1}/{epochs}")
         batchstream = data_loader.CreateBatchStream(
-            dataset_path.encode("utf-8"), batch_size, cache_size,
+            dataset_path.encode("utf-8"),
+            batch_size,
+            cache_size,
         )
         while True:
             sparseBatchPtr = data_loader.GetNextBatch(batchstream)
@@ -96,21 +98,22 @@ def compute_loss(batch, output, lambda_, batch_number, scaling_factor):
     white_features, black_features, turn, score, result = batch
 
     # Loss function
-    wdl_eval_model = torch.sigmoid(output / scaling_factor)
-    wdl_eval_target = torch.sigmoid(score / scaling_factor)
-    wdl_value_target = lambda_ * wdl_eval_target + (1 - lambda_) * result
+    # wdl_eval_model = torch.sigmoid(output / scaling_factor)
+    # wdl_eval_target = torch.sigmoid(score / scaling_factor)
+    # wdl_value_target = lambda_ * wdl_eval_target + (1 - lambda_) * result
     if batch_number % 1000 == 0:
-        writer.add_histogram("Model/value", wdl_eval_model, batch_number)
+        # writer.add_histogram("Model/value", wdl_eval_model, batch_number)
         writer.add_histogram("Model/score", output, batch_number)
-        writer.add_scalars(
-            "Predictions/output",
-            {
-                "max": output.max().item(),
-                "min": output.min().item(),
-                "mean": output.mean().item(),
-            },
-            batch_number,
-        )
-        writer.add_histogram("Target/value", wdl_value_target, batch_number)
+        # writer.add_scalars(
+        #     "Predictions/output",
+        #     {
+        #         "max": output.max().item(),
+        #         "min": output.min().item(),
+        #         "mean": output.mean().item(),
+        #     },
+        #     batch_number,
+        # )
+        # writer.add_histogram("Target/value", wdl_value_target, batch_number)
         writer.add_histogram("Target/score", score, batch_number)
+    return torch.nn.functional.mse_loss(output, score.to(torch.float32))
     return torch.nn.functional.mse_loss(wdl_eval_model, wdl_value_target)
