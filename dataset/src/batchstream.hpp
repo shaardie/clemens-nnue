@@ -33,7 +33,6 @@ public:
   SparseBatch *GetBatch();
 };
 
-PieceType fromExtType(c_chess_cli::PieceType extPieceType);
 } // namespace dataset
 
 #endif

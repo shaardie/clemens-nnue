@@ -1,6 +1,7 @@
 #include "batchstream.hpp"
 #include "c_chess_cli.hpp"
 #include "trainingdataset.hpp"
+#include "types.hpp"
 #include <algorithm>
 #include <mutex>
 #include <thread>
@@ -10,12 +11,20 @@
 
 namespace dataset {
 
+bool ends_with_csv(const std::string &filename) {
+  return filename.size() >= 4 && filename.substr(filename.size() - 4) == ".csv";
+}
+
 BatchStream::BatchStream(std::string filename, std::uint16_t batch_size,
                          std::uint16_t cache_size)
     : batch_size(batch_size), cache_size(cache_size), chan(1024),
       stopped(false) {
 
-  pos_reader = new c_chess_cli::BinPosReader(filename);
+  if (ends_with_csv(filename)) {
+    pos_reader = new c_chess_cli::CSVPosReader(filename);
+  } else {
+    pos_reader = new c_chess_cli::BinPosReader(filename);
+  }
   thread = std::thread(&BatchStream::run, this);
 };
 
@@ -41,13 +50,13 @@ float convert_result(int turn, int result) {
   switch (result) {
   // turn looses
   case 0:
-    return turn == WHITE ? 0 : 1;
+    return turn == types::WHITE ? 0 : 1;
   // draw
   case 1:
     return 0.5;
   // turn wins
   case 2:
-    return turn == WHITE ? 1 : 0;
+    return turn == types::WHITE ? 1 : 0;
     break;
   }
   throw std::runtime_error("strange result");
@@ -64,7 +73,7 @@ SparseBatch *BatchStream::GetBatch() {
 
 void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
   // Get next position, which is not a forced mate
-  c_chess_cli::Pos pos;
+  types::Pos pos;
   while (true) {
     pos = pos_reader->read_pos();
     if (pos.get_score() < MAX_INT16 - 1000 &&
@@ -77,8 +86,8 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
   int kings_found = 0;
   int king_squares[2] = {0};
   for (int i = 0; i < pos.get_number_of_pieces(); ++i) {
-    c_chess_cli::Piece *piece = &pos.pieces[i];
-    if (piece->type != c_chess_cli::KING) {
+    types::Piece *piece = &pos.pieces[i];
+    if (piece->type != types::KING) {
       continue;
     }
     king_squares[piece->color] = piece->square;
@@ -90,19 +99,19 @@ void BatchStream::addPos(std::vector<trainingDataEntry> &v) {
 
   // generate indices for all pieces except the kings
   int number_active_features = 0;
-  int white_features_indices[MAX_ACTIVE_FEATURES] = {0};
-  int black_features_indices[MAX_ACTIVE_FEATURES] = {0};
+  int white_features_indices[types::MAX_ACTIVE_FEATURES] = {0};
+  int black_features_indices[types::MAX_ACTIVE_FEATURES] = {0};
   for (int i = 0; i < pos.get_number_of_pieces(); ++i) {
-    c_chess_cli::Piece *piece = &pos.pieces[i];
-    if (piece->type == c_chess_cli::KING) {
+    types::Piece *piece = &pos.pieces[i];
+    if (piece->type == types::KING) {
       continue;
     }
-    PieceType piece_type = fromExtType(piece->type);
+    types::PieceType piece_type = piece->type;
     int p_idx = piece_type * 2 + piece->color;
     white_features_indices[number_active_features] =
-        piece->square + (p_idx + king_squares[WHITE] * 10) * 64;
+        piece->square + (p_idx + king_squares[types::WHITE] * 10) * 64;
     black_features_indices[number_active_features] =
-        piece->square + (p_idx + king_squares[BLACK] * 10) * 64;
+        piece->square + (p_idx + king_squares[types::BLACK] * 10) * 64;
     number_active_features++;
 
     // sort the indices
@@ -139,28 +148,5 @@ void BatchStream::run() {
     chan.push(new SparseBatch(v));
   }
 };
-
-PieceType fromExtType(c_chess_cli::PieceType extPieceType) {
-  switch (extPieceType) {
-  case c_chess_cli::PAWN:
-    return PAWN;
-  case c_chess_cli::PAWN_CAPTURABLE_ENPASSANT:
-    return PAWN;
-  case c_chess_cli::KNIGHT:
-    return KNIGHT;
-  case c_chess_cli::ROOK:
-    return ROOK;
-  case c_chess_cli::ROOK_WITH_CASTLING_RIGHT:
-    return ROOK;
-  case c_chess_cli::QUEEN:
-    return QUEEN;
-  case c_chess_cli::KING:
-    return KING;
-  case c_chess_cli::BISHOP:
-    return BISHOP;
-  default:
-    throw std::runtime_error("unable to open file");
-  }
-}
 
 } // namespace dataset

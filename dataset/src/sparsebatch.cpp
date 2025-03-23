@@ -29,8 +29,8 @@ SparseBatch::SparseBatch(const std::vector<trainingDataEntry> &entries) {
   // and so on. And within features for one position the feature indices
   // are also in ascending order. Why this is needed will be apparent later.
 
-  white_features_indices = new int[size * MAX_ACTIVE_FEATURES * 2];
-  black_features_indices = new int[size * MAX_ACTIVE_FEATURES * 2];
+  white_features_indices = new int[size * types::MAX_ACTIVE_FEATURES * 2];
+  black_features_indices = new int[size * types::MAX_ACTIVE_FEATURES * 2];
 
   fill(entries);
 }
