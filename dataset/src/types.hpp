@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <ostream>
 #include <sys/types.h>
 
 namespace types {
@@ -111,6 +112,10 @@ struct Piece {
   Square square;
   PieceType type;
   Color color;
+  friend std::ostream &operator<<(std::ostream &os, const Piece &p) {
+    os << "(" << p.square << "," << p.type << "," << p.color << ")";
+    return os;
+  }
 };
 struct Pos {
 private:
@@ -134,7 +139,7 @@ public:
     assert(r <= 100);
     rule50 = r;
   };
-  std::uint8_t get_rule50() const { return turn; };
+  std::uint8_t get_rule50() const { return rule50; };
 
   void set_number_of_pieces(std::uint8_t n) {
     assert(n <= 32);
@@ -153,6 +158,23 @@ public:
 
   Pos() = default;
   ~Pos() = default;
+
+  friend std::ostream &operator<<(std::ostream &os, const Pos &pos) {
+    os << "Turn: " << (pos.turn == 0 ? "White" : "Black") << "\n";
+    os << "50-move rule: " << (int)pos.rule50 << "\n";
+    os << "Score: " << pos.score << " cp\n";
+    os << "Result: "
+       << (pos.result == 0 ? "Loss" : (pos.result == 1 ? "Draw" : "Win"))
+       << "\n";
+    os << "Number of pieces: " << (int)pos.number_of_pieces << "\n";
+
+    os << "Pieces: \n";
+    for (int i = 0; i < pos.number_of_pieces; ++i) {
+      os << "  Piece " << i + 1 << ": " << pos.pieces[i] << "\n";
+    }
+
+    return os;
+  }
 };
 
 } // namespace types

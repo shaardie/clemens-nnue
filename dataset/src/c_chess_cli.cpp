@@ -11,7 +11,7 @@
 
 namespace c_chess_cli {
 
-BinPosReader::BinPosReader(std::string filename) {
+BinPosReader::BinPosReader(const std::string filename) {
   stream.open(filename);
   if (!stream) {
     throw std::runtime_error("unable to open file");
@@ -115,7 +115,7 @@ types::Pos BinPosReader::read_pos() {
   return pos;
 }
 
-CSVPosReader::CSVPosReader(std::string &filename) {
+CSVPosReader::CSVPosReader(const std::string &filename) {
   stream.open(filename);
   if (!stream) {
     throw std::runtime_error("unable to open file");
@@ -124,8 +124,6 @@ CSVPosReader::CSVPosReader(std::string &filename) {
 
 CSVPosReader::~CSVPosReader() { stream.close(); };
 
-char comma = ',';
-char space = ' ';
 types::Pos CSVPosReader::read_pos() {
   std::string line;
   if (!std::getline(stream, line)) {
@@ -133,8 +131,10 @@ types::Pos CSVPosReader::read_pos() {
   }
   std::istringstream iss_line(line);
   std::string fen, eval_str, result_str;
-  if (!(iss_line >> fen >> comma >> eval_str >> comma >> result_str)) {
-    throw std::runtime_error("error reading csv line");
+  if (!std::getline(iss_line, fen, ',') ||
+      !std::getline(iss_line, eval_str, ',') ||
+      !std::getline(iss_line, result_str, ',')) {
+    throw std::runtime_error("Error reading CSV line");
   }
   types::Pos pos;
   pos.set_score(static_cast<std::int16_t>(std::stoi(eval_str)));
@@ -143,9 +143,8 @@ types::Pos CSVPosReader::read_pos() {
   std::istringstream iss_fen(fen);
   std::string piece_str, turn_str, rochade_str, en_passant_str, rule50_str,
       halfmove_str;
-  if (!(iss_fen >> piece_str >> space >> turn_str >> space >> rochade_str >>
-        space >> en_passant_str >> space >> rule50_str >> space >>
-        halfmove_str)) {
+  if (!(iss_fen >> piece_str >> turn_str >> rochade_str >> en_passant_str >>
+        rule50_str >> halfmove_str)) {
     throw std::runtime_error("unable to split fen");
   }
 
@@ -153,17 +152,18 @@ types::Pos CSVPosReader::read_pos() {
   std::istringstream iss_pieces(piece_str);
   unsigned char token;
   types::Square square = types::SQ_A8;
-  int i = 0;
   types::Piece *piece;
+  pos.set_number_of_pieces(0);
   while (iss_pieces >> token) {
     if (std::isdigit(token)) {
       square += (token - '0') * types::EAST;
     } else if (token == '/') {
       square += 2 * types::SOUTH;
     } else {
-      piece = &pos.pieces[i];
-      i++;
+      piece = &pos.pieces[pos.get_number_of_pieces()];
+      pos.set_number_of_pieces(pos.get_number_of_pieces() + 1);
       piece->square = square;
+      square += 1;
       switch (token) {
       case 'r':
         piece->color = types::BLACK;

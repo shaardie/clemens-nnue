@@ -33,7 +33,7 @@ private:
   types::PieceType fromExtType(PieceType extPieceType);
 
 public:
-  BinPosReader(std::string filename);
+  BinPosReader(const std::string filename);
   ~BinPosReader();
 
   types::Pos read_pos();
@@ -44,7 +44,7 @@ private:
   std::ifstream stream;
 
 public:
-  CSVPosReader(std::string &filename);
+  CSVPosReader(const std::string &filename);
   ~CSVPosReader();
   types::Pos read_pos();
 };
