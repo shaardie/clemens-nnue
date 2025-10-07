@@ -116,4 +116,3 @@ def compute_loss(batch, output, lambda_, batch_number, scaling_factor):
         # writer.add_histogram("Target/value", wdl_value_target, batch_number)
         writer.add_histogram("Target/score", score, batch_number)
     return torch.nn.functional.mse_loss(output, score.to(torch.float32))
-    return torch.nn.functional.mse_loss(wdl_eval_model, wdl_value_target)
