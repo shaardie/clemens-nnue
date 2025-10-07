@@ -6,7 +6,7 @@ import numpy as np
 from model import NUM_FEATURES
 
 # External C Library
-libdataset = ctypes.CDLL(".dataset/build/libdataset.so")
+libdataset = ctypes.CDLL("./dataset/build/libdataset.so")
 
 CreateBatchStream = libdataset.CreateBatchStream
 CreateBatchStream.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes.c_uint]
@@ -30,7 +30,7 @@ class SparseBatch(ctypes.Structure):
 
     def get_tensors(self, device):
         stm = torch.from_numpy(
-            np.ctypeslib.as_array(self.score, shape=(self.size, 1))
+            np.ctypeslib.as_array(self.stm, shape=(self.size, 1))
         ).to(device)
         score = torch.from_numpy(
             np.ctypeslib.as_array(self.score, shape=(self.size, 1))
