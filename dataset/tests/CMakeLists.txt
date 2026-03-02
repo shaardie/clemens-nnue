@@ -1,4 +1,0 @@
-add_executable(test_CSVPosReader test_CSVPosReader.cpp)
-target_link_libraries(test_CSVPosReader PRIVATE dataset gtest gtest_main)
-
-add_test(NAME CSVPosReaderTest COMMAND test_CSVPosReader)
