@@ -3,6 +3,7 @@
 import csv
 from typing import List, Tuple
 import struct
+import os.path
 
 import chess
 import numpy
@@ -24,8 +25,11 @@ EVAL_SCALE = 400.0  # Sigmoid-Skalierung
 
 BATCH_SIZE = 4096
 LEARNING_RATE = 0.001
-EPOCHS = 15
+WEIGHT_DECAY = 1e-4
+EPOCHS = 50
 MAX_PIECES = 32  # Maximal 32 Figuren auf dem Brett
+
+CACHE_FILE = "dataset_cache.npz"
 
 PIECE_TYPE_TO_NUMBER = {
     chess.PAWN: 0,
@@ -43,6 +47,15 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 class ChessDataset(Dataset):
     def __init__(self) -> None:
+        if os.path.exists(CACHE_FILE):
+            print("load data from cache")
+            data = numpy.load(CACHE_FILE)
+            self.stm = data["stm"]
+            self.opp = data["opp"]
+            self.targets = data["targets"]
+            print(f"{len(self.targets)} positions read from cache")
+            return
+
         with open(INPUT, "r") as input:
             csv_reader = csv.reader(input)
 
@@ -90,7 +103,13 @@ class ChessDataset(Dataset):
             self.opp = self.opp[:number_of_positions]
             self.targets = self.targets[:number_of_positions]
 
-            print(f"{number_of_positions} positions read")
+            print(f"\n{number_of_positions} positions read")
+
+        print("save positions to cache")
+        numpy.savez_compressed(
+            CACHE_FILE, stm=self.stm, opp=self.opp, targets=self.targets
+        )
+        print("cache saved")
 
     def __len__(self):
         return len(self.targets)
@@ -185,18 +204,24 @@ def train():
     )
 
     model = NNUEModel().to(DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    )
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=EPOCHS, eta_min=1e-6
+    )
+
     loss_fn = torch.nn.MSELoss()
 
     param_count = sum(p.numel() for p in model.parameters())
-    print(f"Gerät: {DEVICE}")
+    print(f"Device: {DEVICE}")
     print(f"Parameter: {param_count:,}")
-    print(f"Trainings-Positionen: {n_train:,}")
-    print(f"Validierungs-Positionen: {n_val:,}\n")
+    print(f"tranings positions: {n_train:,}")
+    print(f"validation positions: {n_val:,}\n")
 
     for epoch in range(EPOCHS):
-        # --- Training ---
+        # --- training ---
         model.train()
         t_loss, t_batches = 0.0, 0
 
@@ -215,7 +240,7 @@ def train():
             t_loss += loss.item()
             t_batches += 1
 
-        # --- Validierung ---
+        # --- validation ---
         model.eval()
         v_loss, v_batches = 0.0, 0
 
@@ -233,18 +258,18 @@ def train():
         lr = scheduler.get_last_lr()[0]
 
         print(
-            f"Epoche {epoch + 1:2d}/{EPOCHS} │ "
-            f"Train-Loss: {t_loss / t_batches:.6f} │ "
-            f"Val-Loss:   {v_loss / v_batches:.6f} │ "
+            f"Epoch {epoch + 1:2d}/{EPOCHS} │ "
+            f"train loss: {t_loss / t_batches:.6f} │ "
+            f"validation loss:   {v_loss / v_batches:.6f} │ "
             f"LR: {lr:.6f}"
         )
 
-    # Gewichte speichern
+    # save wheights
     save_weights(model, "nnue.bin")
-    print(f"\nModell gespeichert: nnue.bin")
+    print(f"\nmodell saved")
 
 
-# ─── Gewichte exportieren ────────────────────────────────────────
+# ─── Export wheights ────────────────────────────────────────
 
 
 def save_weights(model: NNUEModel, path: str):
