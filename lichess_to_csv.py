@@ -7,8 +7,8 @@ import sys
 import csv
 import json
 
-# Etract 5 000 000 positions
-NUMBER_OF_POSITIONS = 5000000
+# Etract 10 000 000 positions
+NUMBER_OF_POSITIONS = 10000000
 OUTPUT = "eval.csv"
 
 

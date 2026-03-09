@@ -18,8 +18,8 @@ OUTPUT = "features.csv"
 CLAMP_SIZE = 2000
 
 INPUT_SIZE = 768  # 12 Figurentypen × 64 Felder
-HIDDEN_SIZE = 256  # Feature-Transformer-Breite
-L1_SIZE = 32  # Erste versteckte Schicht
+HIDDEN_SIZE = 512  # Feature-Transformer-Breite
+L1_SIZE = 64  # Erste versteckte Schicht
 L2_SIZE = 32  # Zweite versteckte Schicht
 EVAL_SCALE = 400.0  # Sigmoid-Skalierung
 
@@ -220,6 +220,8 @@ def train():
     print(f"tranings positions: {n_train:,}")
     print(f"validation positions: {n_val:,}\n")
 
+    best_val_loss = None
+
     for epoch in range(EPOCHS):
         # --- training ---
         model.train()
@@ -257,16 +259,20 @@ def train():
         scheduler.step()
         lr = scheduler.get_last_lr()[0]
 
+        avg_val_loss = v_loss / v_batches
+
         print(
             f"Epoch {epoch + 1:2d}/{EPOCHS} │ "
             f"train loss: {t_loss / t_batches:.6f} │ "
-            f"validation loss:   {v_loss / v_batches:.6f} │ "
+            f"validation loss:   {avg_val_loss:.6f} │ "
             f"LR: {lr:.6f}"
         )
 
-    # save wheights
-    save_weights(model, "nnue.bin")
-    print(f"\nmodell saved")
+        # save wheights
+        if best_val_loss is None or avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            save_weights(model, "nnue.bin")
+            print("\nmodell saved")
 
 
 # ─── Export wheights ────────────────────────────────────────
