@@ -41,9 +41,9 @@ import torch
 # the exported weights for inference.
 
 INPUT_SIZE = 768  # 12 piece types × 64 squares
-HIDDEN_SIZE = 256  # Feature transformer output width
-L1_SIZE = 32  # First hidden layer after concatenation
-L2_SIZE = 32  # Second hidden layer
+HIDDEN_SIZE = 64  # Feature transformer output width
+L1_SIZE = 16  # First hidden layer after concatenation
+L2_SIZE = 16  # Second hidden layer
 EVAL_SCALE = 400.0  # Sigmoid scaling factor: cp = EVAL_SCALE × raw_output
 
 # ─── Training Hyperparameters ────────────────────────────────────
@@ -51,7 +51,7 @@ EVAL_SCALE = 400.0  # Sigmoid scaling factor: cp = EVAL_SCALE × raw_output
 BATCH_SIZE = 4096
 LEARNING_RATE = 0.001
 WEIGHT_DECAY = 3e-4  # AdamW weight decay (regularization)
-EPOCHS = 25
+EPOCHS = 100
 MAX_PIECES = 32  # Maximum number of pieces on a chess board
 
 # ─── Evaluation Clamping ─────────────────────────────────────────
