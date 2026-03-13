@@ -12,7 +12,9 @@ import struct
 import numpy
 import torch
 from train import NNUEModel, INPUT_SIZE, HIDDEN_SIZE, L1_SIZE, L2_SIZE
+from train import MODEL_FILE as INPUT_FILE
 
+OUTPUT_FILE = f"nnue-h{HIDDEN_SIZE}-l{L1_SIZE}.bin"
 QUANT_SCALE = 256
 
 
@@ -43,13 +45,8 @@ def save_weights(model: NNUEModel, path: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="PyTorch model file (.pt)")
-    parser.add_argument("output", help="Output binary file (.bin)")
-    args = parser.parse_args()
-
     model = NNUEModel()
-    model.load_state_dict(torch.load(args.input, map_location="cpu"))
+    model.load_state_dict(torch.load(INPUT_FILE, map_location="cpu"))
     model.eval()
-    save_weights(model, args.output)
-    print(f"Exported {args.input} → {args.output}")
+    save_weights(model, OUTPUT_FILE)
+    print(f"Exported {INPUT_FILE} → {OUTPUT_FILE}")
