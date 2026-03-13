@@ -41,7 +41,7 @@ import torch
 # the exported weights for inference.
 
 INPUT_SIZE = 768  # 12 piece types × 64 squares
-HIDDEN_SIZE = 64  # Feature transformer output width
+HIDDEN_SIZE = 128  # Feature transformer output width
 L1_SIZE = 16  # First hidden layer after concatenation
 L2_SIZE = 16  # Second hidden layer
 EVAL_SCALE = 400.0  # Sigmoid scaling factor: cp = EVAL_SCALE × raw_output
@@ -62,7 +62,7 @@ CLAMP_SIZE = 2000
 # ─── File Paths ──────────────────────────────────────────────────
 
 CACHE_FILE = "dataset_cache.npz"
-MODEL_FILE = "nnue.bin"
+MODEL_FILE = "nnue.pt"
 
 # ─── Device Selection ────────────────────────────────────────────
 # Automatically selects GPU if available, otherwise CPU.
@@ -416,7 +416,7 @@ def train():
         marker = ""
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            save_weights(model, MODEL_FILE)
+            torch.save(model.state_dict(), MODEL_FILE)
             marker = " ← saved"
 
         print(
@@ -430,53 +430,6 @@ def train():
 
 
 # ─── Weight Export ────────────────────────────────────────────────
-
-
-def save_weights(model: NNUEModel, path: str):
-    """
-    Export model weights as flat little-endian float32 values.
-
-    This binary format is designed for easy loading in Go without
-    any ML framework dependencies.
-
-    File layout:
-        1. Header: 4 × uint32 (INPUT_SIZE, HIDDEN_SIZE, L1_SIZE, L2_SIZE)
-        2. FT weights  (INPUT_SIZE × HIDDEN_SIZE float32, TRANSPOSED)
-           Transposed so that each feature's weight vector is contiguous
-           in memory — this enables efficient incremental updates.
-        3. FT bias     (HIDDEN_SIZE float32)
-        4. L1 weights  (L1_SIZE × HIDDEN_SIZE*2 float32, row-major)
-        5. L1 bias     (L1_SIZE float32)
-        6. L2 weights  (L2_SIZE × L1_SIZE float32, row-major)
-        7. L2 bias     (L2_SIZE float32)
-        8. Out weights (L2_SIZE float32)
-        9. Out bias    (1 float32)
-
-    Args:
-        model: Trained NNUEModel instance.
-        path: Output file path.
-    """
-    with open(path, "wb") as f:
-        # Header with architecture dimensions for validation on load
-        for v in (INPUT_SIZE, HIDDEN_SIZE, L1_SIZE, L2_SIZE):
-            f.write(struct.pack("<I", v))
-
-        def write_tensor(t):
-            arr = t.detach().cpu().numpy().astype(numpy.float32)
-            f.write(arr.tobytes())
-
-        # Feature transformer weights: transposed from (HIDDEN, INPUT)
-        # to (INPUT, HIDDEN) so that feature[i] is a contiguous block.
-        write_tensor(model.ft.weight.t())
-        write_tensor(model.ft.bias)
-
-        # Remaining layers: stored in PyTorch's default (out × in) layout
-        write_tensor(model.l1.weight)
-        write_tensor(model.l1.bias)
-        write_tensor(model.l2.weight)
-        write_tensor(model.l2.bias)
-        write_tensor(model.out.weight)
-        write_tensor(model.out.bias)
 
 
 if __name__ == "__main__":
